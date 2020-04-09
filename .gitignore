@@ -7,3 +7,4 @@ scratch.py
 .ipynb_checkpoints/
 *.json
 *.mp4
+*.idea/

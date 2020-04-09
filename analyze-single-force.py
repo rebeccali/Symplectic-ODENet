@@ -7,7 +7,7 @@
 # This file is a script version of 'analyze-single-force.ipynb'
 # Cells are seperated by the vscode convention '#%%'
 
-#%% 
+#%%
 import torch, time, sys
 import autograd
 import autograd.numpy as np
@@ -40,9 +40,9 @@ def get_args():
          'seed': 0,
          'save_dir': './{}'.format(EXPERIMENT_DIR),
          'fig_dir': './figures',
-         'num_points': 5,
+         'num_points': 2,
          'gpu': 0,
-         'solver': 'dopri5',
+         'solver': 'rk4',
          'rad': False,
          'gym': False}
 
@@ -57,7 +57,7 @@ args = ObjectView(get_args())
 device = torch.device('cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
 def get_model(args, baseline, structure, damping, num_points, gym=False):
     if structure == False and baseline == True:
-        nn_model = MLP(args.input_dim, 600, args.input_dim, args.nonlinearity).to(device)    
+        nn_model = MLP(args.input_dim, 600, args.input_dim, args.nonlinearity).to(device)
         model = SymODEN_R(args.input_dim, H_net=nn_model, device=device, baseline=True)
     elif structure == False and baseline == False:
         H_net = MLP(args.input_dim, 400, 1, args.nonlinearity).to(device)
@@ -74,6 +74,7 @@ def get_model(args, baseline, structure, damping, num_points, gym=False):
     struct = '-struct' if structure else ''
     rad = '-rad' if args.rad else ''
     path = '{}pend-{}{}-{}-p{}{}.tar'.format(args.save_dir, model_name, struct, args.solver, num_points, rad)
+    print(path)
     model.load_state_dict(torch.load(path, map_location=device))
     path = '{}/pend-{}{}-{}-p{}-stats{}.pkl'.format(args.save_dir, model_name, struct, args.solver, num_points, rad)
     stats = from_pickle(path)
@@ -119,14 +120,14 @@ pred_x, pred_t_eval = data['x'], data['t']
 #%%
 from torchdiffeq import odeint
 def get_pred_loss(pred_x, pred_t_eval, model):
-    pred_x = torch.tensor(pred_x, requires_grad=True, dtype=torch.float32).to(device) 
+    pred_x = torch.tensor(pred_x, requires_grad=True, dtype=torch.float32).to(device)
     pred_t_eval = torch.tensor(pred_t_eval, requires_grad=True, dtype=torch.float32).to(device)
 
     pred_loss = []
     for i in range(pred_x.shape[0]):
-        pred_x_hat = odeint(model, pred_x[i, 0, :, :], pred_t_eval, method='rk4')            
+        pred_x_hat = odeint(model, pred_x[i, 0, :, :], pred_t_eval, method='rk4')
         pred_loss.append((pred_x[i,:,:,:] - pred_x_hat)**2)
-    
+
     pred_loss = torch.cat(pred_loss, dim=1)
     pred_loss_per_traj = torch.sum(pred_loss, dim=(0, 2))
 
@@ -155,7 +156,7 @@ print('Prediction error {:.4e} +/- {:.4e}'
 
 #%%
 def integrate_model(model, t_span, y0, **kwargs):
-    
+
     def fun(t, np_x):
         x = torch.tensor( np_x, requires_grad=True, dtype=torch.float32).view(1,3).to(device)
         dx = model(0, x).detach().cpu().numpy().reshape(-1)
@@ -180,7 +181,7 @@ symoden_struct_ivp = integrate_model(symoden_ode_struct_model, t_span, y0_u, **k
 def get_vector_field(model, u=0, **kwargs):
     field = get_field(**kwargs)
     np_mesh_x = field['x']
-    
+
     # run model
     mesh_x = torch.tensor( np_mesh_x, requires_grad=True, dtype=torch.float32).to(device)
     mesh_x_aug = torch.cat((mesh_x, u * torch.ones_like(mesh_x)[:,0].view(-1, 1)), dim=1)
@@ -210,7 +211,7 @@ for _ in range(1):
     plt.scatter(x,y, s=14, label='data', c=point_colors)
 
     plt.quiver(field['x'][:,0], field['x'][:,1], field['dx'][:,0], field['dx'][:,1],
-            cmap='gray_r', scale=ARROW_SCALE, width=ARROW_WIDTH, color=(.2,.2,.2))  
+            cmap='gray_r', scale=ARROW_SCALE, width=ARROW_WIDTH, color=(.2,.2,.2))
 
     plt.xlabel("$q$", fontsize=14)
     plt.ylabel("$p$", rotation=0, fontsize=14)
